@@ -10,6 +10,9 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"os"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -92,16 +95,27 @@ func (r *KnowledgeBaseRepository) SyncKBAccessSettingsToCaddy(ctx context.Contex
 			})
 		}
 	}
+	// socketPath := r.config.CaddyAPI
+	// 定义socket路径
 	socketPath := r.config.CaddyAPI
+	// 如果没有配置Caddy API路径，使用默认值
+	if socketPath == "" {
+		socketPath = "./data/caddy/run/caddy-admin.sock"
+	}
 	// sync kb to caddy
 	// create server for each port
 	subnetPrefix := r.config.SubnetPrefix
 	if subnetPrefix == "" {
 		subnetPrefix = "169.254.15"
 	}
-	api := fmt.Sprintf("%s.2:8000", subnetPrefix)
-	app := fmt.Sprintf("%s.112:3010", subnetPrefix)
-	staticFile := fmt.Sprintf("%s.12:9000", subnetPrefix) // minio
+	// api := fmt.Sprintf("%s.2:8000", subnetPrefix)
+	// app := fmt.Sprintf("%s.112:3010", subnetPrefix)
+	// staticFile := fmt.Sprintf("%s.12:9000", subnetPrefix) // minio
+
+	subnetPrefix = "106.52.81.173" // 本地开发模式使用
+	api := fmt.Sprintf("%s:8000", subnetPrefix)
+	app := fmt.Sprintf("%s:3010", subnetPrefix)
+	staticFile := fmt.Sprintf("%s:9000", subnetPrefix) // minio
 	servers := make(map[string]any, 0)
 	for port, hostKBMap := range portHostKBMap {
 		trustProxies := make([]string, 0)
@@ -269,16 +283,61 @@ func (r *KnowledgeBaseRepository) SyncKBAccessSettingsToCaddy(ctx context.Contex
 		"apps": apps,
 	}
 	newBody, _ := json.Marshal(config)
-	tr := &http.Transport{
-		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-			return net.Dial("unix", socketPath)
-		},
+	// 设置默认的requestURL
+	requestURL := "http://unix/load"
+
+	tr := &http.Transport{}
+	// 在Windows环境下，使用HTTP连接而不是Unix socket
+	if runtime.GOOS == "windows" {
+		r.logger.Info("Windows environment detected, using HTTP connection instead of Unix socket")
+		// 优先从环境变量中获取Caddy地址，提供更好的灵活性
+		caddyAddr := os.Getenv("CADDY_ADMIN_ADDR")
+		if caddyAddr != "" {
+			// 确保地址以正确的方式结束
+			if !strings.HasSuffix(caddyAddr, "/load") {
+				if strings.HasSuffix(caddyAddr, "/") {
+					caddyAddr += "load"
+				} else {
+					caddyAddr += "/load"
+				}
+			}
+			requestURL = caddyAddr
+			r.logger.Info("Using Caddy address from environment variable", "url", requestURL)
+		} else {
+			// 默认使用Docker在Windows上的典型地址范围
+			requestURL = "http://192.168.99.100:2019/load"
+			r.logger.Info("Using default Docker Desktop IP for Caddy connection (can be overridden with CADDY_ADMIN_ADDR env var)", "url", requestURL)
+		}
+	} else {
+		// 在Linux/Mac环境下使用Unix socket
+		r.logger.Info("Unix-like environment detected, using Unix socket connection")
+		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// 记录连接尝试
+			r.logger.Info("Attempting to connect to Caddy socket", "path", socketPath)
+
+			// 检查socket文件是否存在
+			if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+				r.logger.Error("Caddy socket file does not exist", "path", socketPath)
+				return nil, fmt.Errorf("Caddy socket file does not exist at %s: %w", socketPath, err)
+			}
+
+			// 尝试连接Unix socket
+			conn, err := net.Dial("unix", socketPath)
+			if err != nil {
+				r.logger.Error("Failed to connect to Caddy socket", "path", socketPath, "error", err.Error())
+				return nil, fmt.Errorf("failed to connect to Caddy socket %s: %w", socketPath, err)
+			}
+
+			r.logger.Info("Successfully connected to Caddy socket")
+			return conn, nil
+		}
 	}
-	client := &http.Client{
+	var client *http.Client
+	client = &http.Client{
 		Transport: tr,
 		Timeout:   5 * time.Second,
 	}
-	req, err := http.NewRequest("POST", "http://unix/load", bytes.NewBuffer(newBody))
+	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(newBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

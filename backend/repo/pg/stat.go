@@ -12,10 +12,10 @@ import (
 
 type StatRepository struct {
 	db    *pg.DB
-	cache *cache.Cache
+	cache cache.Cache
 }
 
-func NewStatRepository(db *pg.DB, cahe *cache.Cache) *StatRepository {
+func NewStatRepository(db *pg.DB, cahe cache.Cache) *StatRepository {
 	return &StatRepository{
 		db:    db,
 		cache: cahe,

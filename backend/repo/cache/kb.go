@@ -11,10 +11,10 @@ import (
 )
 
 type KBRepo struct {
-	cache *cache.Cache
+	cache cache.Cache
 }
 
-func NewKBRepo(cache *cache.Cache) *KBRepo {
+func NewKBRepo(cache cache.Cache) *KBRepo {
 	return &KBRepo{cache: cache}
 }
 

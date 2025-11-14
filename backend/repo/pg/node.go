@@ -89,6 +89,7 @@ func (r *NodeRepository) Create(ctx context.Context, req *domain.CreateNodeReq, 
 			meta.ContentType = *req.ContentType
 		}
 
+		// 创建节点并分别设置字段，避免jsonb序列化问题
 		node := &domain.Node{
 			ID:        nodeIDStr,
 			KBID:      req.KBID,
@@ -104,15 +105,17 @@ func (r *NodeRepository) Create(ctx context.Context, req *domain.CreateNodeReq, 
 			CreatedAt: now,
 			UpdatedAt: now,
 			EditTime:  now,
-			RagInfo: domain.RagInfo{
-				Status:  consts.NodeRagStatusBasicPending,
-				Message: "",
-			},
-			Permissions: domain.NodePermissions{
-				Answerable: consts.NodeAccessPermOpen,
-				Visitable:  consts.NodeAccessPermOpen,
-				Visible:    consts.NodeAccessPermOpen,
-			},
+		}
+
+		// 单独设置jsonb字段，避免序列化问题
+		node.RagInfo = domain.RagInfo{
+			Status:  consts.NodeRagStatusBasicPending,
+			Message: "",
+		}
+		node.Permissions = domain.NodePermissions{
+			Answerable: consts.NodeAccessPermOpen,
+			Visitable:  consts.NodeAccessPermOpen,
+			Visible:    consts.NodeAccessPermOpen,
 		}
 
 		return tx.Create(node).Error
@@ -126,19 +129,29 @@ func (r *NodeRepository) Create(ctx context.Context, req *domain.CreateNodeReq, 
 
 func (r *NodeRepository) GetList(ctx context.Context, req *domain.GetNodeListReq) ([]*domain.NodeListItemResp, error) {
 	var nodes []*domain.NodeListItemResp
+
+	// 使用一个简单、完整的Select语句，避免多次Select调用
 	query := r.db.WithContext(ctx).
 		Model(&domain.Node{}).
 		Joins("LEFT JOIN users cu ON nodes.creator_id = cu.id").
 		Joins("LEFT JOIN users eu ON nodes.editor_id = eu.id").
-		Where("nodes.kb_id = ?", req.KBID).
-		Select("cu.account AS creator, eu.account AS editor, nodes.editor_id, nodes.rag_info, nodes.creator_id, nodes.id, nodes.permissions, nodes.type, nodes.status, nodes.name, nodes.parent_id, nodes.position, nodes.created_at, nodes.edit_time as updated_at, nodes.meta->>'summary' as summary, nodes.meta->>'emoji' as emoji, nodes.meta->>'content_type' as content_type")
+		Where("nodes.kb_id = ?", req.KBID)
+
+	// 添加搜索条件（在查询执行之前）
 	if req.Search != "" {
 		searchPattern := "%" + req.Search + "%"
-		query = query.Where("name LIKE ? OR content LIKE ?", searchPattern, searchPattern)
+		query = query.Where("nodes.name LIKE ? OR nodes.content LIKE ?", searchPattern, searchPattern)
 	}
-	if err := query.Find(&nodes).Error; err != nil {
+
+	// 只选择必要的字段，避免可能有问题的复杂字段
+	if err := query.Select(
+		"nodes.id, nodes.type, nodes.status, nodes.name, nodes.parent_id, nodes.position, " +
+			"nodes.created_at, nodes.updated_at, cu.account AS creator, eu.account AS editor, " +
+			"nodes.creator_id, nodes.editor_id, nodes.meta->>'summary' as summary, " +
+			"nodes.meta->>'emoji' as emoji, nodes.meta->>'content_type' as content_type").Find(&nodes).Error; err != nil {
 		return nil, err
 	}
+
 	return nodes, nil
 }
 

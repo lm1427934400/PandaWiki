@@ -17,10 +17,10 @@ import (
 type APITokenRepo struct {
 	db     *pg.DB
 	logger *log.Logger
-	cache  *cache.Cache
+	cache  cache.Cache
 }
 
-func NewAPITokenRepo(db *pg.DB, logger *log.Logger, cache *cache.Cache) *APITokenRepo {
+func NewAPITokenRepo(db *pg.DB, logger *log.Logger, cache cache.Cache) *APITokenRepo {
 	return &APITokenRepo{
 		db:     db,
 		logger: logger,

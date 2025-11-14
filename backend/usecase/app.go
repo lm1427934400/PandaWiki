@@ -28,7 +28,7 @@ type AppUsecase struct {
 	chatUsecase   *ChatUsecase
 	logger        *log.Logger
 	config        *config.Config
-	cache         *cache.Cache
+	cache         cache.Cache
 	dingTalkBots  map[string]*dingtalk.DingTalkClient
 	dingTalkMutex sync.RWMutex
 	feishuBots    map[string]*feishu.FeishuClient
@@ -47,7 +47,7 @@ func NewAppUsecase(
 	logger *log.Logger,
 	config *config.Config,
 	chatUsecase *ChatUsecase,
-	cache *cache.Cache,
+	cache cache.Cache,
 ) *AppUsecase {
 	u := &AppUsecase{
 		repo:         repo,

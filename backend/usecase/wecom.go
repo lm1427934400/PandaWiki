@@ -17,13 +17,13 @@ import (
 
 type WecomUsecase struct {
 	logger      *log.Logger
-	cache       *cache.Cache
+	cache       cache.Cache
 	AppUsecase  *AppUsecase
 	authRepo    *pg.AuthRepo
 	chatUsecase *ChatUsecase
 }
 
-func NewWecomUsecase(logger *log.Logger, cache *cache.Cache, AppUsecase *AppUsecase, chatUsecase *ChatUsecase, authRepo *pg.AuthRepo) *WecomUsecase {
+func NewWecomUsecase(logger *log.Logger, cache cache.Cache, AppUsecase *AppUsecase, chatUsecase *ChatUsecase, authRepo *pg.AuthRepo) *WecomUsecase {
 	return &WecomUsecase{
 		logger:      logger.WithModule("usecase.wecom"),
 		cache:       cache,

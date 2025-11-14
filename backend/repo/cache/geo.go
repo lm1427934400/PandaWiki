@@ -14,12 +14,12 @@ import (
 )
 
 type GeoRepo struct {
-	cache  *cache.Cache
+	cache  cache.Cache
 	db     *pg.DB
 	logger *log.Logger
 }
 
-func NewGeoCache(cache *cache.Cache, db *pg.DB, logger *log.Logger) *GeoRepo {
+func NewGeoCache(cache cache.Cache, db *pg.DB, logger *log.Logger) *GeoRepo {
 	return &GeoRepo{
 		cache:  cache,
 		db:     db,

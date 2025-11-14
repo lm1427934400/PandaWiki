@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ListDataItem } from '..';
 import { NoParseTypes, TYPE_CONFIG } from '../constants';
 import { flattenCrawlerParseResponse } from '../util';
+import { useGlobalQueue } from '../hooks/useGlobalQueue';
 
 interface FileParseProps {
   type: ConstsCrawlerSource;
@@ -25,6 +26,7 @@ const FileParse = ({ type, parent_id, setData }: FileParseProps) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [fileList, setFileList] = useState<File[]>([]);
+  const queue = useGlobalQueue();
 
   const isMultiple = useMemo(() => {
     return NoParseTypes.includes(type);
@@ -44,7 +46,76 @@ const FileParse = ({ type, parent_id, setData }: FileParseProps) => {
           parent_id: parent_id || '',
           status: 'common' as const,
         }));
+
+        // 先将文件添加到列表
         setData(newFileList);
+
+        // 然后上传文件到服务器
+        await Promise.all(
+          newFileList.map(item =>
+            queue.enqueue(async () => {
+              if (!item.fileData) {
+                return;
+              }
+
+              try {
+                // 上传文件并监听进度
+                const resp = await postApiV1FileUpload(
+                  { file: item.fileData },
+                  {
+                    onUploadProgress: progressEvent => {
+                      const percentCompleted = progressEvent.total
+                        ? Math.round(
+                            (progressEvent.loaded * 100) / progressEvent.total,
+                          )
+                        : 0;
+
+                      // 更新进度
+                      setData(prev =>
+                        prev.map(prevItem =>
+                          prevItem.uuid === item.uuid
+                            ? { ...prevItem, progress: percentCompleted }
+                            : prevItem,
+                        ),
+                      );
+                    },
+                  },
+                );
+
+                // 上传成功，保存 key 和文件类型
+                setData(prev =>
+                  prev.map(prevItem =>
+                    prevItem.uuid === item.uuid
+                      ? {
+                          ...prevItem,
+                          id: resp.key,
+                          file_type: resp.filename?.split('.').pop(),
+                          progress: 100,
+                        }
+                      : prevItem,
+                  ),
+                );
+              } catch (error) {
+                // 上传失败
+                setData(prev =>
+                  prev.map(prevItem =>
+                    prevItem.uuid === item.uuid
+                      ? {
+                          ...prevItem,
+                          status: 'upload-error',
+                          summary:
+                            error instanceof Error
+                              ? error.message
+                              : '文件上传失败',
+                          progress: undefined,
+                        }
+                      : prevItem,
+                  ),
+                );
+              }
+            }),
+          ),
+        );
       } else {
         setFileList(uploadFiles);
         setLoading(true);
@@ -70,7 +141,7 @@ const FileParse = ({ type, parent_id, setData }: FileParseProps) => {
         setData(prev => [...prev, ...flattenedData]);
       }
     },
-    [type, parent_id],
+    [type, parent_id, queue],
   );
 
   return (

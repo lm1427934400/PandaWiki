@@ -192,7 +192,7 @@ const MarkDown = ({ loading = false, content }: MarkDownProps) => {
             return (
               <img
                 alt={alt || 'markdown-img'}
-                src={src || ''}
+                src={src || null}
                 {...rest}
                 style={{
                   width: width || 'auto',

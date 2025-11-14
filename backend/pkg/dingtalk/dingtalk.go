@@ -36,7 +36,7 @@ type Client struct {
 	oauthClient     *dingtalkoauth2_1_0.Client
 	cardClient      *dingtalkcard_1_0.Client
 	dingTalkAuthURL string
-	cache           *cache.Cache
+	cache           cache.Cache
 }
 
 // UserInfo 用于解析获取用户信息的接口返回

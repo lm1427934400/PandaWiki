@@ -37,7 +37,7 @@ var oauthEndpoint = oauth2.Endpoint{
 // Client 企业微信客户端
 type Client struct {
 	context     context.Context
-	cache       *cache.Cache
+	cache       cache.Cache
 	httpClient  *http.Client
 	oauthConfig *oauth2.Config
 	logger      *log.Logger

@@ -1,9 +1,10 @@
 import { getApiV1NodeDetail } from '@/request/Node';
 import { V1NodeDetailResp } from '@/request/types';
 import { useAppSelector } from '@/store';
-import { Box } from '@mui/material';
+import { Box, Typography, Alert } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
+
 import { WrapContext } from '..';
 import LoadingEditorWrap from './Loading';
 import EditorWrap from './Wrap';
@@ -14,9 +15,11 @@ const Edit = () => {
   const { setNodeDetail } = useOutletContext<WrapContext>();
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<V1NodeDetailResp | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const getDetail = () => {
     setLoading(true);
+    setError(null);
     getApiV1NodeDetail({
       id,
       kb_id,
@@ -27,6 +30,10 @@ const Edit = () => {
         setTimeout(() => {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }, 0);
+      })
+      .catch(err => {
+        console.error('获取文档详情失败:', err);
+        setError('无法找到文档。文档可能已被删除或您没有权限访问。');
       })
       .finally(() => {
         setLoading(false);
@@ -44,6 +51,9 @@ const Edit = () => {
       sx={{
         position: 'relative',
         flexGrow: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
         /* Give a remote user a caret */
         '& .collaboration-carets__caret': {
           borderLeft: '1px solid #fff',
@@ -73,6 +83,24 @@ const Edit = () => {
     >
       {loading ? (
         <LoadingEditorWrap />
+      ) : error ? (
+        <Box
+          sx={{
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            p: 4,
+          }}
+        >
+          <Alert severity='error' sx={{ mb: 2, maxWidth: '600px' }}>
+            {error}
+          </Alert>
+          <Typography variant='body1' color='text.secondary'>
+            文档ID: {id}
+          </Typography>
+        </Box>
       ) : (
         detail && <EditorWrap detail={detail} />
       )}

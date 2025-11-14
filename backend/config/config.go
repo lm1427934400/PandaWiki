@@ -19,6 +19,7 @@ type Config struct {
 	Auth          AuthConfig   `mapstructure:"auth"`
 	S3            S3Config     `mapstructure:"s3"`
 	Sentry        SentryConfig `mapstructure:"sentry"`
+	AnyDoc        AnyDocConfig `mapstructure:"anydoc"`
 	CaddyAPI      string       `mapstructure:"caddy_api"`
 	SubnetPrefix  string       `mapstructure:"subnet_prefix"`
 }
@@ -81,6 +82,12 @@ type SentryConfig struct {
 	DSN     string `mapstructure:"dsn"`
 }
 
+type AnyDocConfig struct {
+	APIBaseURL     string `mapstructure:"api_base_url"`
+	CrawlerBaseURL string `mapstructure:"crawler_base_url"`
+	UploaderDir    string `mapstructure:"uploader_dir"`
+}
+
 func NewConfig() (*Config, error) {
 	// set default config
 	SUBNET_PREFIX := os.Getenv("SUBNET_PREFIX")
@@ -129,6 +136,11 @@ func NewConfig() (*Config, error) {
 		Sentry: SentryConfig{
 			Enabled: true,
 			DSN:     "https://2a4cff1ae04b624ffc72663f523024ff@sentry.baizhi.cloud/4",
+		},
+		AnyDoc: AnyDocConfig{
+			APIBaseURL:     "http://panda-wiki-api:8000",
+			CrawlerBaseURL: "http://panda-wiki-crawler:8080",
+			UploaderDir:    "/image",
 		},
 		CaddyAPI:     "/app/run/caddy-admin.sock",
 		SubnetPrefix: "169.254.15",
@@ -198,6 +210,16 @@ func overrideWithEnv(c *Config) {
 		c.Redis.Addr = env
 	}
 	// s3
+	// anydoc
+	if env := os.Getenv("ANYDOC_API_BASE_URL"); env != "" {
+		c.AnyDoc.APIBaseURL = env
+	}
+	if env := os.Getenv("ANYDOC_CRAWLER_BASE_URL"); env != "" {
+		c.AnyDoc.CrawlerBaseURL = env
+	}
+	if env := os.Getenv("ANYDOC_UPLOADER_DIR"); env != "" {
+		c.AnyDoc.UploaderDir = env
+	}
 	if env := os.Getenv("S3_ENDPOINT"); env != "" {
 		c.S3.Endpoint = env
 	}

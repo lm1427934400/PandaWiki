@@ -1,0 +1,5 @@
+-- 删除新增的Node字段
+ALTER TABLE nodes DROP COLUMN IF EXISTS permissions;
+ALTER TABLE nodes DROP COLUMN IF EXISTS creator_id;
+ALTER TABLE nodes DROP COLUMN IF EXISTS editor_id;
+ALTER TABLE nodes DROP COLUMN IF EXISTS edit_time;

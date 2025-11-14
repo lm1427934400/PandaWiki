@@ -55,6 +55,12 @@ func NewDB(config *config.Config) (*DB, error) {
 }
 
 func doMigrate(dsn string) error {
+	// Check if migration should be skipped
+	if skipMigration := os.Getenv("SKIP_MIGRATION"); skipMigration == "true" {
+		log.Println("Skipping database migration as SKIP_MIGRATION=true")
+		return nil
+	}
+	
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("open db failed: %w", err)

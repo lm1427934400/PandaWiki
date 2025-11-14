@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chaitin/panda-wiki/config"
 	"github.com/chaitin/panda-wiki/domain"
 	"github.com/chaitin/panda-wiki/log"
 	"github.com/chaitin/panda-wiki/mq"
@@ -23,6 +24,7 @@ type Client struct {
 	httpClient  *http.Client
 	logger      *log.Logger
 	mqConsumer  mq.MQConsumer
+	config      *config.Config
 	taskWaiters map[string]chan *domain.AnydocTaskExportEvent
 	mutex       sync.RWMutex
 	subscribed  bool
@@ -30,13 +32,11 @@ type Client struct {
 }
 
 const (
-	apiUploaderUrl     = "http://panda-wiki-api:8000/api/v1/file/upload/anydoc"
-	uploaderDir        = "/image"
-	crawlerServiceHost = "http://panda-wiki-crawler:8080"
-	SpaceIdCloud       = "cloud_disk"
-	getUrlPath         = "/api/docs/url/list"
-	UrlExportPath      = "/api/docs/url/export"
-	TaskListPath       = "/api/tasks/list"
+	SpaceIdCloud     = "cloud_disk"
+	getUrlPath       = "/api/docs/url/list"
+	UrlExportPath    = "/api/docs/url/export"
+	TaskListPath     = "/api/tasks/list"
+	uploadAnydocPath = "/api/v1/file/upload/anydoc"
 )
 
 type Status string
@@ -55,7 +55,7 @@ const (
 	uploaderTypeHTTP
 )
 
-func NewClient(logger *log.Logger, mqConsumer mq.MQConsumer) (*Client, error) {
+func NewClient(logger *log.Logger, mqConsumer mq.MQConsumer, cfg *config.Config) (*Client, error) {
 	client := &Client{
 		logger: logger.WithModule("anydoc.client"),
 		httpClient: &http.Client{
@@ -67,6 +67,7 @@ func NewClient(logger *log.Logger, mqConsumer mq.MQConsumer) (*Client, error) {
 		},
 		taskWaiters: make(map[string]chan *domain.AnydocTaskExportEvent),
 		mqConsumer:  mqConsumer,
+		config:      cfg,
 	}
 
 	return client, nil
@@ -74,7 +75,7 @@ func NewClient(logger *log.Logger, mqConsumer mq.MQConsumer) (*Client, error) {
 
 func (c *Client) GetUrlList(ctx context.Context, targetURL, id string) (*ListDocResponse, error) {
 
-	u, err := url.Parse(crawlerServiceHost)
+	u, err := url.Parse(c.config.AnyDoc.CrawlerBaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +100,16 @@ func (c *Client) GetUrlList(ctx context.Context, targetURL, id string) (*ListDoc
 		return nil, err
 	}
 	c.logger.Info("scrape url", "requestURL:", requestURL, "resp", string(respBody))
+
+	// 检查HTTP状态码
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("crawler service returned non-200 status: %d, response: %s", resp.StatusCode, string(respBody))
+	}
+
 	var scrapeResp ListDocResponse
 	err = json.Unmarshal(respBody, &scrapeResp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse JSON response: %w, response: %s", err, string(respBody))
 	}
 
 	if !scrapeResp.Success {
@@ -114,7 +121,7 @@ func (c *Client) GetUrlList(ctx context.Context, targetURL, id string) (*ListDoc
 
 func (c *Client) UrlExport(ctx context.Context, id, docID, kbId string) (*UrlExportRes, error) {
 
-	u, err := url.Parse(crawlerServiceHost)
+	u, err := url.Parse(c.config.AnyDoc.CrawlerBaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +134,7 @@ func (c *Client) UrlExport(ctx context.Context, id, docID, kbId string) (*UrlExp
 		"uploader": map[string]interface{}{
 			"type": uploaderTypeHTTP,
 			"http": map[string]interface{}{
-				"url": apiUploaderUrl,
+				"url": c.config.AnyDoc.APIBaseURL + uploadAnydocPath,
 			},
 			"dir": fmt.Sprintf("/%s", kbId),
 		},
@@ -153,10 +160,16 @@ func (c *Client) UrlExport(ctx context.Context, id, docID, kbId string) (*UrlExp
 		return nil, err
 	}
 	c.logger.Info("UrlExport", "requestURL:", requestURL, "resp", string(respBody))
+
+	// 检查HTTP状态码
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("crawler service returned non-200 status: %d, response: %s", resp.StatusCode, string(respBody))
+	}
+
 	var res UrlExportRes
 	err = json.Unmarshal(respBody, &res)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse JSON response: %w, response: %s", err, string(respBody))
 	}
 
 	if !res.Success {
@@ -270,7 +283,7 @@ func (c *Client) handleTaskExportEvent(ctx context.Context, msg types.Message) e
 }
 
 func (c *Client) TaskList(ctx context.Context, ids []string) (*TaskRes, error) {
-	u, err := url.Parse(crawlerServiceHost)
+	u, err := url.Parse(c.config.AnyDoc.CrawlerBaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -300,10 +313,16 @@ func (c *Client) TaskList(ctx context.Context, ids []string) (*TaskRes, error) {
 		return nil, err
 	}
 	c.logger.Info("TaskList url", "requestURL", requestURL, "resp", string(respBody))
+
+	// 检查HTTP状态码
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("crawler service returned non-200 status: %d, response: %s", resp.StatusCode, string(respBody))
+	}
+
 	var res TaskRes
 	err = json.Unmarshal(respBody, &res)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse JSON response: %w, response: %s", err, string(respBody))
 	}
 
 	if !res.Success {
@@ -316,7 +335,7 @@ func (c *Client) TaskList(ctx context.Context, ids []string) (*TaskRes, error) {
 }
 
 func (c *Client) DownloadDoc(ctx context.Context, filepath string) ([]byte, error) {
-	u, err := url.Parse(crawlerServiceHost)
+	u, err := url.Parse(c.config.AnyDoc.CrawlerBaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +351,13 @@ func (c *Client) DownloadDoc(ctx context.Context, filepath string) ([]byte, erro
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	// 检查HTTP状态码
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("crawler service returned non-200 status: %d, response: %s", resp.StatusCode, string(respBody))
+	}
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

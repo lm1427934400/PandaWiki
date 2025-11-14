@@ -26,10 +26,10 @@ type AuthUsecase struct {
 	AuthRepo *pg.AuthRepo
 	logger   *log.Logger
 	kbRepo   *pg.KnowledgeBaseRepository
-	cache    *cache.Cache
+	cache    cache.Cache
 }
 
-func NewAuthUsecase(authRepo *pg.AuthRepo, logger *log.Logger, kbRepo *pg.KnowledgeBaseRepository, cache *cache.Cache) (*AuthUsecase, error) {
+func NewAuthUsecase(authRepo *pg.AuthRepo, logger *log.Logger, kbRepo *pg.KnowledgeBaseRepository, cache cache.Cache) (*AuthUsecase, error) {
 	u := &AuthUsecase{
 		AuthRepo: authRepo,
 		kbRepo:   kbRepo,

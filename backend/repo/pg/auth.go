@@ -19,10 +19,10 @@ import (
 type AuthRepo struct {
 	db     *pg.DB
 	logger *log.Logger
-	cache  *cache.Cache
+	cache  cache.Cache
 }
 
-func NewAuthRepo(db *pg.DB, logger *log.Logger, cache *cache.Cache) *AuthRepo {
+func NewAuthRepo(db *pg.DB, logger *log.Logger, cache cache.Cache) *AuthRepo {
 	return &AuthRepo{
 		db:     db,
 		logger: logger,
